@@ -59,7 +59,7 @@ services:
     disk:
       name: wikipedia-dump
       mountPath: /data
-      sizeGB: 20
+      sizeGB: 50
     envVars:
       - key: DATABASE_URL
         fromDatabase:
