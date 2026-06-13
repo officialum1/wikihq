@@ -12,6 +12,13 @@ class Settings(BaseSettings):
         default="postgresql://wiki:wiki@localhost:5432/wikipedia",
         validation_alias="DATABASE_URL",
     )
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def fix_postgres_dialect(cls, value: str) -> str:
+        if isinstance(value, str) and value.startswith("postgres://"):
+            return value.replace("postgres://", "postgresql://", 1)
+        return value
     redis_url: str = Field(default="redis://localhost:6379/0", validation_alias="REDIS_URL")
     elasticsearch_url: str = Field(
         default="http://localhost:9200",

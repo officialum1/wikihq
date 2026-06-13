@@ -539,9 +539,12 @@ def import_dump() -> None:
         logger.info("Resuming import after page_id=%s total_imported=%s", last_page_id, total_imported)
 
         try:
-            search_client = Elasticsearch(ELASTICSEARCH_URL, request_timeout=30)
-            ensure_search_index(search_client)
-        except ElasticsearchException as exc:
+            if ELASTICSEARCH_URL:
+                search_client = Elasticsearch(ELASTICSEARCH_URL, request_timeout=30)
+                ensure_search_index(search_client)
+            else:
+                search_client = None
+        except Exception as exc:
             logger.warning("Elasticsearch unavailable; continuing without indexing: %s", exc)
             search_client = None
 

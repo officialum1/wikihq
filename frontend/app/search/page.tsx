@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import SearchBox from "@/components/SearchBox";
-import { getArticle, getSearch, titleToPath } from "@/lib/api";
+import { getArticle, searchArticles, titleToPath } from "@/lib/api";
 import { formatDate, stripHtml } from "@/lib/format";
 
 type SearchPageProps = {
@@ -15,12 +15,12 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const query = typeof searchParams.q === "string" ? searchParams.q : "";
   const trimmedQuery = query.trim();
   const page = Math.max(Number(searchParams.page || "1"), 1);
-  let data: Awaited<ReturnType<typeof getSearch>> | null = null;
+  let data: Awaited<ReturnType<typeof searchArticles>> | null = null;
   let exactArticleExists = false;
 
   if (trimmedQuery) {
     [data, exactArticleExists] = await Promise.all([
-      getSearch(trimmedQuery, page).catch(() => null),
+      searchArticles(trimmedQuery, page).catch(() => null),
       getArticle(trimmedQuery).then(() => true).catch(() => false)
     ]);
   }

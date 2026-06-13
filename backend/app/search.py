@@ -9,7 +9,11 @@ from .models import Article
 INDEX_NAME = "articles"
 
 
+from elasticsearch import ElasticsearchException
+
 def get_client() -> Elasticsearch:
+    if not settings.elasticsearch_url:
+        raise ElasticsearchException("Elasticsearch URL is empty")
     return Elasticsearch(settings.elasticsearch_url, request_timeout=5)
 
 
