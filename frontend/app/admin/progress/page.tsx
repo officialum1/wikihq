@@ -1,9 +1,16 @@
 import { Gauge } from "lucide-react";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { getProgress } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 
 export default async function ProgressPage() {
+  const token = cookies().get("token");
+  if (!token?.value) {
+    redirect("/admin/login");
+  }
+
   const progress = await getProgress().catch(() => null);
 
   return (

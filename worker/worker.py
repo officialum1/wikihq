@@ -293,7 +293,7 @@ def download_dump() -> None:
         remote_size = 0
 
     if DUMP_PATH.exists():
-        if remote_size > 0 and DUMP_PATH.stat().st_size != remote_size:
+        if remote_size > 0 and DUMP_PATH.stat().st_size != remote_size and DUMP_PATH.stat().st_size < 20 * 1024 * 1024 * 1024:
             logger.warning(f"Existing dump size {DUMP_PATH.stat().st_size} != {remote_size}. Deleting.")
             DUMP_PATH.unlink()
         else:
