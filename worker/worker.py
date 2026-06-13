@@ -328,32 +328,46 @@ def ensure_search_index(client: Elasticsearch) -> None:
     )
 
 
+import xml.etree.ElementTree as ET
+
 def iter_pages(last_page_id: int) -> Iterable[Dict[str, Any]]:
-    with bz2.open(DUMP_PATH, "rb") as dump_file:
-        dump = mwxml.Dump.from_file(dump_file)
-        for page in dump:
-            page_id = int(page.id)
-            namespace = int(getattr(page, "namespace", 0))
-            # We process articles (0), templates (10). File descriptions (6) if needed.
-            if namespace not in (0, 10) or page_id <= last_page_id:
-                continue
-
-            redirect = normalize_title(page.redirect) if getattr(page, "redirect", None) else None
-
-            latest_revision = None
-            for revision in page:
-                latest_revision = revision
-
-            if latest_revision is None or not latest_revision.text:
-                continue
-
-            yield {
-                "page_id": page_id,
-                "title": normalize_title(page.title),
-                "content": latest_revision.text,
-                "namespace": namespace,
-                "redirect": redirect
-            }
+    with bz2.open(DUMP_PATH, "rt", encoding="utf-8") as dump_file:
+        context = ET.iterparse(dump_file, events=("end",))
+        for event, elem in context:
+            tag_name = elem.tag.split("}")[-1]
+            if tag_name == "page":
+                ns = elem.tag.split("}")[0] + "}" if "}" in elem.tag else ""
+                
+                ns_elem = elem.find(f"{ns}ns")
+                namespace = int(ns_elem.text) if ns_elem is not None and ns_elem.text else 0
+                
+                id_elem = elem.find(f"{ns}id")
+                page_id = int(id_elem.text) if id_elem is not None and id_elem.text else 0
+                
+                if namespace in (0, 10) and page_id > last_page_id:
+                    title_elem = elem.find(f"{ns}title")
+                    title = title_elem.text if title_elem is not None else ""
+                    
+                    redirect_elem = elem.find(f"{ns}redirect")
+                    redirect = redirect_elem.attrib.get("title") if redirect_elem is not None else None
+                    
+                    latest_revision = None
+                    for rev in elem.findall(f"{ns}revision"):
+                        text_elem = rev.find(f"{ns}text")
+                        if text_elem is not None and text_elem.text:
+                            latest_revision = text_elem.text
+                            
+                    if latest_revision:
+                        yield {
+                            "page_id": page_id,
+                            "title": normalize_title(title),
+                            "content": latest_revision,
+                            "namespace": namespace,
+                            "redirect": normalize_title(redirect) if redirect else None
+                        }
+                        
+                # Free memory
+                elem.clear()
 
 
 def fetch_article_ids(conn: PgConnection, page_ids: list[int]) -> dict[int, int]:
