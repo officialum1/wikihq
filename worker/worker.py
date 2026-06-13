@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Iterable, Dict, Any
 
 import mwparserfromhell
-import mwxml
 import psycopg2
 import requests
 from elasticsearch import Elasticsearch
