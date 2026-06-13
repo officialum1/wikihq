@@ -1,0 +1,100 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: wikipedia
+      POSTGRES_USER: wiki
+      POSTGRES_PASSWORD: wiki
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wiki -d wikipedia"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql://wiki:wiki@postgres:5432/wikipedia
+      REDIS_URL: redis://redis:6379/0
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      JWT_SECRET: local-development-jwt-secret-change-before-production
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
+      CORS_ORIGINS: http://localhost:3000
+      ADMIN_BOOTSTRAP_USERNAME: admin
+      ADMIN_BOOTSTRAP_EMAIL: admin@wikihq.local
+      ADMIN_BOOTSTRAP_PASSWORD: admin12345
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      elasticsearch:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./worker
+    environment:
+      DATABASE_URL: postgresql://wiki:wiki@postgres:5432/wikipedia
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      WIKIPEDIA_DUMP_URL: https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2
+      DUMP_PATH: /data/enwiki-latest-pages-articles.xml.bz2
+      BATCH_SIZE: "1000"
+      RUN_ONCE: "false"
+      REFRESH_INTERVAL_SECONDS: "86400"
+    volumes:
+      - wikipedia-dump:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      INTERNAL_API_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres-data:
+  redis-data:
+  elasticsearch-data:
+  wikipedia-dump:

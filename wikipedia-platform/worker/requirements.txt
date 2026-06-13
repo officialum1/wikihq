@@ -1,0 +1,6 @@
+mwxml==0.3.3
+mwparserfromhell==0.6.6
+psycopg2-binary==2.9.10
+requests==2.32.3
+elasticsearch==8.17.0
+
