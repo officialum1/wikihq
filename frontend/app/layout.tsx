@@ -8,8 +8,8 @@ import UserNav from "@/components/UserNav";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Wikipedia Platform",
-  description: "A Wikipedia mirror and editable wiki platform"
+  title: "WikiHQ",
+  description: "A professional wiki platform"
 };
 
 function ThemeScript() {
@@ -30,8 +30,8 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
         <ThemeScript />
         <header className="topbar">
           <Link className="brand" href="/">
-            <span className="brand-mark">W</span>
-            <span>Wikipedia Platform</span>
+            <img src="/logo.png" alt="WikiHQ Logo" style={{ width: "24px", height: "24px", marginRight: "8px", borderRadius: "4px" }} />
+            <span>WikiHQ</span>
           </Link>
           <nav className="topnav" aria-label="Primary">
             <Link href="/">

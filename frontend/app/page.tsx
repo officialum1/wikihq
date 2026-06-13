@@ -7,7 +7,7 @@ export default function HomePage() {
     <main className="home-page">
       <section className="home-hero" aria-labelledby="home-title">
         <div className="wiki-emblem" aria-hidden="true">W</div>
-        <h1 id="home-title">Wikipedia Platform</h1>
+        <h1 id="home-title">WikiHQ</h1>
         <p>The free encyclopedia mirror.</p>
         <SearchBox autoFocus />
         <div className="home-links">
