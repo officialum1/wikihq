@@ -283,12 +283,28 @@ def update_progress(conn: PgConnection, last_page_id: int, imported_count: int) 
 
 
 def download_dump() -> None:
-    if DUMP_PATH.exists() and DUMP_PATH.stat().st_size > 0:
-        logger.info("Using existing dump at %s", DUMP_PATH)
-        return
-
     DUMP_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        head_resp = requests.head(WIKIPEDIA_DUMP_URL, timeout=30)
+        remote_size = int(head_resp.headers.get("Content-Length", 0))
+    except Exception as e:
+        logger.warning(f"Could not get remote size: {e}")
+        remote_size = 0
+
+    if DUMP_PATH.exists():
+        if remote_size > 0 and DUMP_PATH.stat().st_size != remote_size:
+            logger.warning(f"Existing dump size {DUMP_PATH.stat().st_size} != {remote_size}. Deleting.")
+            DUMP_PATH.unlink()
+        else:
+            logger.info("Using existing dump at %s", DUMP_PATH)
+            return
+
     partial_path = DUMP_PATH.with_suffix(DUMP_PATH.suffix + ".part")
+    if partial_path.exists() and remote_size > 0 and partial_path.stat().st_size > remote_size:
+        logger.warning("Partial dump is larger than remote size. Deleting it.")
+        partial_path.unlink()
+
     resume_at = partial_path.stat().st_size if partial_path.exists() else 0
     headers = {"Range": f"bytes={resume_at}-"} if resume_at else {}
     mode = "ab" if resume_at else "wb"

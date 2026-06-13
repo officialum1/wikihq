@@ -68,7 +68,7 @@ services:
       - key: ELASTICSEARCH_URL
         sync: false
       - key: WIKIPEDIA_DUMP_URL
-        value: https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2
+        value: https://dumps.wikimedia.org/simplewiki/latest/simplewiki-latest-pages-articles.xml.bz2
       - key: DUMP_PATH
         value: /data/enwiki-latest-pages-articles.xml.bz2
       - key: BATCH_SIZE
