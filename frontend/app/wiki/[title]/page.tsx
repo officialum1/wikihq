@@ -17,7 +17,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
   const requestedTitle = pathToTitle(params.title);
   const article = await getArticle(requestedTitle).catch(() => null);
   
-  let categoryMembers = [];
+  let categoryMembers: any[] = [];
   if (article && article.title.startsWith("Category:")) {
     categoryMembers = await getCategoryMembers(article.title).catch(() => []);
   }

@@ -13,7 +13,7 @@ import mwxml
 import psycopg2
 import requests
 from elasticsearch import Elasticsearch
-from elasticsearch import ElasticsearchException, helpers
+from elasticsearch import helpers
 from psycopg2.extensions import connection as PgConnection
 from psycopg2.extras import execute_values
 
@@ -516,7 +516,7 @@ def flush_batch(
                 if actions:
                     try:
                         helpers.bulk(search_client, actions, request_timeout=120)
-                    except ElasticsearchException as exc:
+                    except Exception as exc:
                         logger.warning("Elasticsearch indexing failed for batch: %s", exc)
                         
     conn.commit()

@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timezone
 
-from elasticsearch import ElasticsearchException
+
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, status, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -225,7 +225,7 @@ def on_startup() -> None:
         seed_admin_user(db)
     try:
         search.ensure_index()
-    except ElasticsearchException:
+    except Exception:
         pass
 
 
@@ -690,7 +690,7 @@ def search_endpoint(
                 )
             )
         return SearchResponse(query=query, page=page, page_size=page_size, total=elastic_results["total"], results=results)
-    except ElasticsearchException:
+    except Exception:
         offset = (page - 1) * page_size
         base_query = db.query(Article).filter(
             or_(Article.title.ilike(f"%{query}%"), Article.content.ilike(f"%{query}%"))
@@ -721,7 +721,7 @@ def suggest_endpoint(q: str = Query(min_length=1), db: Session = Depends(get_db)
         # If elasticsearch is configured and running
         elastic_results = search.search_articles(query, 1, 10)
         return [hit["_source"]["title"] for hit in elastic_results["hits"]]
-    except ElasticsearchException:
+    except Exception:
         # Fallback to database
         articles = db.query(Article).filter(Article.title.ilike(f"{query}%")).limit(10).all()
         return [article.title for article in articles]
@@ -764,7 +764,7 @@ def create_article(
     db.commit()
     try:
         search.index_article(article)
-    except ElasticsearchException:
+    except Exception:
         pass
     cache_article(article)
     return article_to_schema(article)
@@ -811,7 +811,7 @@ def update_article(
     clear_article_cache(article.title)
     try:
         search.index_article(article)
-    except ElasticsearchException:
+    except Exception:
         pass
     cache_article(article)
     return article_to_schema(article)
