@@ -13,6 +13,36 @@ type ArticlePageProps = {
   };
 };
 
+import { Metadata } from "next";
+
+export async function generateMetadata({ params }: ArticlePageProps): Promise<Metadata> {
+  const requestedTitle = pathToTitle(params.title);
+  const article = await getArticle(requestedTitle).catch(() => null);
+
+  if (!article) {
+    return {
+      title: `${requestedTitle} - WikiHQ`,
+      description: `Create the ${requestedTitle} article on WikiHQ.`
+    };
+  }
+
+  // Extract a short description from the HTML content
+  const textContent = article.html_content.replace(/<[^>]+>/g, "").slice(0, 160);
+  
+  return {
+    title: `${article.title} - WikiHQ`,
+    description: textContent || `Read about ${article.title} on WikiHQ.`,
+    openGraph: {
+      title: `${article.title} - WikiHQ`,
+      description: textContent || `Read about ${article.title} on WikiHQ.`,
+      siteName: "WikiHQ",
+      type: "article",
+      publishedTime: article.created_at,
+      modifiedTime: article.updated_at,
+    }
+  };
+}
+
 export default async function ArticlePage({ params }: ArticlePageProps) {
   const requestedTitle = pathToTitle(params.title);
   const article = await getArticle(requestedTitle).catch(() => null);

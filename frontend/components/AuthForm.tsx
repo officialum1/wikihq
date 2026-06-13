@@ -36,6 +36,13 @@ export default function AuthForm({ mode }: AuthFormProps) {
       window.localStorage.setItem("wiki_token", token.access_token);
       window.localStorage.setItem("wiki_username", token.username);
       window.localStorage.setItem("wiki_role", token.role);
+      
+      await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: token.access_token })
+      });
+
       window.dispatchEvent(new Event("wiki-auth-changed"));
       router.push(isAdmin || token.role === "admin" ? "/admin" : "/account");
       router.refresh();

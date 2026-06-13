@@ -234,6 +234,17 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/api/sitemap")
+def sitemap_endpoint(db: Session = Depends(get_db)):
+    # Return top 10000 most recently updated articles for sitemap
+    results = db.query(Article.title, Article.updated_at).filter(
+        ~Article.title.startswith("User:"),
+        ~Article.title.startswith("Talk:")
+    ).order_by(Article.updated_at.desc()).limit(10000).all()
+    
+    return [{"title": row.title, "updated_at": row.updated_at} for row in results]
+
+
 @app.post("/api/auth/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 def register(payload: UserRegister, db: Session = Depends(get_db)) -> Token:
     username = payload.username.strip()
