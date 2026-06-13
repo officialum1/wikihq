@@ -1,0 +1,52 @@
+from functools import lru_cache
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    app_name: str = "Wikipedia Platform API"
+    database_url: str = Field(
+        default="postgresql://wiki:wiki@localhost:5432/wikipedia",
+        validation_alias="DATABASE_URL",
+    )
+    redis_url: str = Field(default="redis://localhost:6379/0", validation_alias="REDIS_URL")
+    elasticsearch_url: str = Field(
+        default="http://localhost:9200",
+        validation_alias="ELASTICSEARCH_URL",
+    )
+    jwt_secret: str = Field(
+        default="local-development-jwt-secret-change-before-production",
+        validation_alias="JWT_SECRET",
+    )
+    jwt_algorithm: str = Field(default="HS256", validation_alias="JWT_ALGORITHM")
+    access_token_expire_minutes: int = Field(
+        default=1440,
+        validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES",
+    )
+    cors_origins: list[str] = Field(
+        default=["http://localhost:3000"],
+        validation_alias="CORS_ORIGINS",
+    )
+    admin_bootstrap_username: str = Field(default="", validation_alias="ADMIN_BOOTSTRAP_USERNAME")
+    admin_bootstrap_email: str = Field(default="", validation_alias="ADMIN_BOOTSTRAP_EMAIL")
+    admin_bootstrap_password: str = Field(default="", validation_alias="ADMIN_BOOTSTRAP_PASSWORD")
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value: object) -> list[str]:
+        if isinstance(value, str):
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        if isinstance(value, list):
+            return value
+        return ["http://localhost:3000"]
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()
