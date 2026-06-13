@@ -33,7 +33,7 @@ class Settings(BaseSettings):
         default=1440,
         validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES",
     )
-    cors_origins: list[str] = Field(
+    cors_origins_raw: str | list[str] = Field(
         default=["http://localhost:3000"],
         validation_alias="CORS_ORIGINS",
     )
@@ -41,13 +41,13 @@ class Settings(BaseSettings):
     admin_bootstrap_email: str = Field(default="", validation_alias="ADMIN_BOOTSTRAP_EMAIL")
     admin_bootstrap_password: str = Field(default="", validation_alias="ADMIN_BOOTSTRAP_PASSWORD")
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, value: object) -> list[str]:
-        if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-        if isinstance(value, list):
-            return value
+    @property
+    def cors_origins(self) -> list[str]:
+        val = self.cors_origins_raw
+        if isinstance(val, str):
+            return [origin.strip() for origin in val.split(",") if origin.strip()]
+        if isinstance(val, list):
+            return val
         return ["http://localhost:3000"]
 
 
