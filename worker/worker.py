@@ -436,13 +436,19 @@ def flush_batch(
 
         # 3. Insert Articles
         if articles:
+            # Pre-compute HTML and word count to avoid doing it twice (for DB and ES)
+            for a in articles:
+                if "html" not in a:
+                    a["html"] = wikitext_to_html(a["content"])
+                    a["word_count_val"] = count_words(a["content"])
+
             article_rows = [
                 (
                     a["page_id"],
                     a["title"],
                     a["content"],
-                    wikitext_to_html(a["content"]),
-                    count_words(a["content"])
+                    a["html"],
+                    a["word_count_val"]
                 ) for a in articles
             ]
             execute_values(
@@ -536,8 +542,8 @@ def flush_batch(
                                 "page_id": a["page_id"],
                                 "title": a["title"],
                                 "content": a["content"],
-                                "html_content": wikitext_to_html(a["content"]),
-                                "word_count": count_words(a["content"]),
+                                "html_content": a["html"],
+                                "word_count": a["word_count_val"],
                                 "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                             },
                         }
