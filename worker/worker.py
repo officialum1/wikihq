@@ -5,6 +5,10 @@ import os
 import re
 import time
 import unicodedata
+import urllib.request
+import urllib.error
+import urllib.parse
+from contextlib import closing
 from pathlib import Path
 from typing import Iterable, Dict, Any
 
@@ -367,7 +371,7 @@ def ensure_search_index(client: Elasticsearch) -> None:
 
 import xml.etree.ElementTree as ET
 
-def iter_pages(last_page_id: int) -> Iterable[Dict[str, Any]]:
+def iter_pages(conn: PgConnection, last_page_id: int) -> Iterable[Dict[str, Any]]:
     with bz2.open(DUMP_PATH, "rt", encoding="utf-8") as dump_file:
         context = ET.iterparse(dump_file, events=("start", "end"))
         context = iter(context)
@@ -377,6 +381,9 @@ def iter_pages(last_page_id: int) -> Iterable[Dict[str, Any]]:
             _, root = next(context)
         except StopIteration:
             return
+
+        skipped_count = 0
+        last_log_time = time.time()
 
         for event, elem in context:
             if event == "end":
@@ -390,6 +397,12 @@ def iter_pages(last_page_id: int) -> Iterable[Dict[str, Any]]:
                     id_elem = elem.find(f"{ns}id")
                     page_id = int(id_elem.text) if id_elem is not None and id_elem.text else 0
                     
+                    if page_id <= last_page_id:
+                        skipped_count += 1
+                        if skipped_count % 5000 == 0 or time.time() - last_log_time > 10:
+                            set_progress_status(conn, "running", f"Seeking... Skipped {skipped_count} pages. Currently at page_id {page_id} (Target: {last_page_id})")
+                            last_log_time = time.time()
+
                     if namespace in (0, 10) and page_id > last_page_id:
                         title_elem = elem.find(f"{ns}title")
                         title = title_elem.text if title_elem is not None else ""
@@ -623,7 +636,7 @@ def import_dump() -> None:
         set_progress_status(conn, "running", f"Seeking to page_id {last_page_id} in XML...")
         pages_scanned = 0
 
-        for page in iter_pages(last_page_id):
+        for page in iter_pages(conn, last_page_id):
             pages_scanned += 1
             if pages_scanned % 1000 == 0:
                 set_progress_status(conn, "running", f"Scanning XML: {pages_scanned} pages... currently at page_id {page['page_id']}")
