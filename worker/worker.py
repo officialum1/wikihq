@@ -631,11 +631,11 @@ def import_dump() -> None:
             namespace = page["namespace"]
             if namespace == 0:
                 if page["redirect"]:
-                    redirects_batch.append((page["title"], page["redirect"]))
+                    redirects_batch.append(page)
                 else:
                     articles_batch.append(page)
             elif namespace == 10:
-                templates_batch.append((page["title"], page["content"]))
+                templates_batch.append(page)
 
             if len(articles_batch) + len(templates_batch) + len(redirects_batch) >= BATCH_SIZE:
                 imported = flush_batch(conn, search_client, articles_batch, redirects_batch, templates_batch)
