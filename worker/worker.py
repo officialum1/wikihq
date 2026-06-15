@@ -601,7 +601,7 @@ def import_dump() -> None:
     try:
         ensure_tables(conn)
         set_progress_status(conn, "running")
-        download_dump()
+        download_dump(conn)
         last_page_id, total_imported = read_progress(conn)
         logger.info("Resuming import after page_id=%s total_imported=%s", last_page_id, total_imported)
 
@@ -618,6 +618,7 @@ def import_dump() -> None:
         articles_batch = []
         redirects_batch = []
         templates_batch = []
+        imported_this_run = 0
 
         set_progress_status(conn, "running", f"Seeking to page_id {last_page_id} in XML...")
         pages_scanned = 0
@@ -639,15 +640,23 @@ def import_dump() -> None:
             if len(articles_batch) + len(templates_batch) + len(redirects_batch) >= BATCH_SIZE:
                 imported = flush_batch(conn, search_client, articles_batch, redirects_batch, templates_batch)
                 last_page_id = page["page_id"]
+                imported_this_run += imported
                 update_progress(conn, last_page_id, imported, f"Flushing batch: Imported {imported} articles, last page_id {last_page_id}")
                 logger.info("Imported %d articles, current page_id=%s", imported, last_page_id)
                 articles_batch.clear()
                 redirects_batch.clear()
+                templates_batch.clear()
+                
+        if articles_batch or templates_batch or redirects_batch:
+            imported = flush_batch(conn, search_client, articles_batch, redirects_batch, templates_batch)
+            imported_this_run += imported
+            
         logger.info("Import pass complete; imported_or_updated=%s", imported_this_run)
-    except Exception:
+        set_progress_status(conn, "completed", "Import pass complete")
+    except Exception as e:
         logger.exception("Import failed")
         try:
-            set_progress_status(conn, "failed")
+            set_progress_status(conn, "failed", f"Error: {str(e)[:500]}")
         finally:
             raise
     finally:
