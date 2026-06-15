@@ -347,42 +347,52 @@ import xml.etree.ElementTree as ET
 
 def iter_pages(last_page_id: int) -> Iterable[Dict[str, Any]]:
     with bz2.open(DUMP_PATH, "rt", encoding="utf-8") as dump_file:
-        context = ET.iterparse(dump_file, events=("end",))
+        context = ET.iterparse(dump_file, events=("start", "end"))
+        context = iter(context)
+        
+        # Get the root element
+        try:
+            _, root = next(context)
+        except StopIteration:
+            return
+
         for event, elem in context:
-            tag_name = elem.tag.split("}")[-1]
-            if tag_name == "page":
-                ns = elem.tag.split("}")[0] + "}" if "}" in elem.tag else ""
-                
-                ns_elem = elem.find(f"{ns}ns")
-                namespace = int(ns_elem.text) if ns_elem is not None and ns_elem.text else 0
-                
-                id_elem = elem.find(f"{ns}id")
-                page_id = int(id_elem.text) if id_elem is not None and id_elem.text else 0
-                
-                if namespace in (0, 10) and page_id > last_page_id:
-                    title_elem = elem.find(f"{ns}title")
-                    title = title_elem.text if title_elem is not None else ""
+            if event == "end":
+                tag_name = elem.tag.split("}")[-1]
+                if tag_name == "page":
+                    ns = elem.tag.split("}")[0] + "}" if "}" in elem.tag else ""
                     
-                    redirect_elem = elem.find(f"{ns}redirect")
-                    redirect = redirect_elem.attrib.get("title") if redirect_elem is not None else None
+                    ns_elem = elem.find(f"{ns}ns")
+                    namespace = int(ns_elem.text) if ns_elem is not None and ns_elem.text else 0
                     
-                    latest_revision = None
-                    for rev in elem.findall(f"{ns}revision"):
-                        text_elem = rev.find(f"{ns}text")
-                        if text_elem is not None and text_elem.text:
-                            latest_revision = text_elem.text
-                            
-                    if latest_revision:
-                        yield {
-                            "page_id": page_id,
-                            "title": normalize_title(title),
-                            "content": latest_revision,
-                            "namespace": namespace,
-                            "redirect": normalize_title(redirect) if redirect else None
-                        }
+                    id_elem = elem.find(f"{ns}id")
+                    page_id = int(id_elem.text) if id_elem is not None and id_elem.text else 0
+                    
+                    if namespace in (0, 10) and page_id > last_page_id:
+                        title_elem = elem.find(f"{ns}title")
+                        title = title_elem.text if title_elem is not None else ""
                         
-                # Free memory
-                elem.clear()
+                        redirect_elem = elem.find(f"{ns}redirect")
+                        redirect = redirect_elem.attrib.get("title") if redirect_elem is not None else None
+                        
+                        latest_revision = None
+                        for rev in elem.findall(f"{ns}revision"):
+                            text_elem = rev.find(f"{ns}text")
+                            if text_elem is not None and text_elem.text:
+                                latest_revision = text_elem.text
+                                
+                        if latest_revision:
+                            yield {
+                                "page_id": page_id,
+                                "title": normalize_title(title),
+                                "content": latest_revision,
+                                "namespace": namespace,
+                                "redirect": normalize_title(redirect) if redirect else None
+                            }
+                            
+                    # Free memory from the root to prevent OOM crash
+                    elem.clear()
+                    root.clear()
 
 
 def fetch_article_ids(conn: PgConnection, page_ids: list[int]) -> dict[int, int]:
