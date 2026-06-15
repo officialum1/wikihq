@@ -28,6 +28,12 @@ export default async function ProgressPage() {
             <span>Status</span>
             <strong>{progress.status}</strong>
           </div>
+          {progress.message && (
+            <div className="stat-panel" style={{ gridColumn: "1 / -1" }}>
+              <span>Current Activity</span>
+              <strong>{progress.message}</strong>
+            </div>
+          )}
           <div className="stat-panel">
             <span>Total imported</span>
             <strong>{progress.total_imported.toLocaleString()}</strong>

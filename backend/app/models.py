@@ -75,6 +75,7 @@ class ImportProgress(Base):
     last_page_id = Column(BigInteger, nullable=False, default=0)
     total_imported = Column(Integer, nullable=False, default=0)
     status = Column(String(50), nullable=False, default="idle")
+    message = Column(String(1000), nullable=False, default="")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 

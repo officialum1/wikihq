@@ -185,9 +185,11 @@ def ensure_tables(conn: PgConnection) -> None:
             last_page_id BIGINT NOT NULL DEFAULT 0,
             total_imported INTEGER NOT NULL DEFAULT 0,
             status VARCHAR(50) NOT NULL DEFAULT 'idle',
+            message VARCHAR(1000) NOT NULL DEFAULT '',
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
         """,
+        "ALTER TABLE import_progress ADD COLUMN IF NOT EXISTS message VARCHAR(1000) NOT NULL DEFAULT ''",
         """
         CREATE TABLE IF NOT EXISTS categories (
             id SERIAL PRIMARY KEY,
@@ -248,11 +250,20 @@ def ensure_tables(conn: PgConnection) -> None:
     conn.commit()
 
 
-def set_progress_status(conn: PgConnection, status: str) -> None:
+def update_progress(conn: PgConnection, last_page_id: int, imported_count: int, message: str = "") -> None:
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE import_progress SET status = %s, updated_at = NOW() WHERE id = 1",
-            (status,),
+            "UPDATE import_progress SET last_page_id = %s, total_imported = total_imported + %s, message = %s, updated_at = NOW() WHERE id = 1",
+            (last_page_id, imported_count, message),
+        )
+    conn.commit()
+
+
+def set_progress_status(conn: PgConnection, status: str, message: str = "") -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE import_progress SET status = %s, message = %s, updated_at = NOW() WHERE id = 1",
+            (status, message),
         )
     conn.commit()
 
@@ -282,22 +293,24 @@ def update_progress(conn: PgConnection, last_page_id: int, imported_count: int) 
     conn.commit()
 
 
-def download_dump() -> None:
-    DUMP_PATH.parent.mkdir(parents=True, exist_ok=True)
-
+def download_dump(conn: PgConnection) -> None:
+    remote_size = 0
+    set_progress_status(conn, "running", "Checking Wikipedia dump size...")
     try:
-        head_resp = requests.head(WIKIPEDIA_DUMP_URL, timeout=30)
-        remote_size = int(head_resp.headers.get("Content-Length", 0))
+        response = requests.head(WIKIPEDIA_DUMP_URL, timeout=10)
+        if response.status_code == 200:
+            remote_size = int(response.headers.get("content-length", 0))
     except Exception as e:
-        logger.warning(f"Could not get remote size: {e}")
-        remote_size = 0
+        logger.warning("Could not fetch dump metadata: %s", e)
 
     if DUMP_PATH.exists():
         if remote_size > 0 and DUMP_PATH.stat().st_size != remote_size and DUMP_PATH.stat().st_size < 20 * 1024 * 1024 * 1024:
             logger.warning(f"Existing dump size {DUMP_PATH.stat().st_size} != {remote_size}. Deleting.")
+            set_progress_status(conn, "running", "Deleting old incomplete dump...")
             DUMP_PATH.unlink()
         else:
             logger.info("Using existing dump at %s", DUMP_PATH)
+            set_progress_status(conn, "running", "Using existing dump, reading file...")
             return
 
     partial_path = DUMP_PATH.with_suffix(DUMP_PATH.suffix + ".part")
@@ -317,11 +330,20 @@ def download_dump() -> None:
             mode = "wb"
         response.raise_for_status()
         with partial_path.open(mode) as output:
+            downloaded = resume_at
+            last_log = 0
             for chunk in response.iter_content(chunk_size=1024 * 1024):
                 if chunk:
                     output.write(chunk)
+                    downloaded += len(chunk)
+                    if downloaded - last_log > 100 * 1024 * 1024:  # Log every 100 MB
+                        last_log = downloaded
+                        mb = downloaded // (1024 * 1024)
+                        total_mb = remote_size // (1024 * 1024) if remote_size else "?"
+                        set_progress_status(conn, "running", f"Downloading dump: {mb}MB / {total_mb}MB")
     partial_path.replace(DUMP_PATH)
     logger.info("Downloaded dump to %s", DUMP_PATH)
+    set_progress_status(conn, "running", "Download complete, processing...")
 
 
 def ensure_search_index(client: Elasticsearch) -> None:
@@ -594,28 +616,33 @@ def import_dump() -> None:
             search_client = None
 
         articles_batch = []
-        templates_batch = []
         redirects_batch = []
-        imported_this_run = 0
-        
+        templates_batch = []
+
+        set_progress_status(conn, "running", f"Seeking to page_id {last_page_id} in XML...")
+        pages_scanned = 0
+
         for page in iter_pages(last_page_id):
-            if page["redirect"]:
-                redirects_batch.append(page)
-            elif page["namespace"] == 10:
-                templates_batch.append(page)
-            elif page["namespace"] == 0:
-                articles_batch.append(page)
+            pages_scanned += 1
+            if pages_scanned % 1000 == 0:
+                set_progress_status(conn, "running", f"Scanning XML: {pages_scanned} pages... currently at page_id {page['page_id']}")
+
+            namespace = page["namespace"]
+            if namespace == 0:
+                if page["redirect"]:
+                    redirects_batch.append((page["title"], page["redirect"]))
+                else:
+                    articles_batch.append(page)
+            elif namespace == 10:
+                templates_batch.append((page["title"], page["content"]))
 
             if len(articles_batch) + len(templates_batch) + len(redirects_batch) >= BATCH_SIZE:
                 imported = flush_batch(conn, search_client, articles_batch, redirects_batch, templates_batch)
-                imported_this_run += imported
-                logger.info("Processed batch; last_page_id=%s", page["page_id"])
+                last_page_id = page["page_id"]
+                update_progress(conn, last_page_id, imported, f"Flushing batch: Imported {imported} articles, last page_id {last_page_id}")
+                logger.info("Imported %d articles, current page_id=%s", imported, last_page_id)
                 articles_batch.clear()
-                templates_batch.clear()
                 redirects_batch.clear()
-
-        imported_this_run += flush_batch(conn, search_client, articles_batch, redirects_batch, templates_batch)
-        set_progress_status(conn, "complete")
         logger.info("Import pass complete; imported_or_updated=%s", imported_this_run)
     except Exception:
         logger.exception("Import failed")

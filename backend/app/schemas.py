@@ -73,6 +73,7 @@ class ProgressOut(BaseModel):
     last_page_id: int
     total_imported: int
     status: str
+    message: str = ""
     updated_at: datetime
 
 

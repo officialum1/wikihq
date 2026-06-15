@@ -35,6 +35,7 @@ export type Progress = {
   last_page_id: number;
   total_imported: number;
   status: string;
+  message?: string;
   updated_at: string;
 };
 
