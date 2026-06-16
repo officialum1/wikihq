@@ -737,7 +737,60 @@ def import_dump() -> None:
         conn.close()
 
 
+import json
+
+def create_officialum1_page() -> None:
+    try:
+        with closing(psycopg2.connect(DATABASE_URL)) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM articles WHERE title = 'officialum1'")
+                if cur.fetchone():
+                    logger.info("officialum1 page already exists.")
+                    return
+
+            logger.info("Fetching Facebook article from Wikipedia...")
+            url = "https://en.wikipedia.org/w/api.php?action=query&prop=revisions&rvprop=content&titles=Facebook&format=json"
+            req = urllib.request.Request(url, headers={'User-Agent': 'WikiHQ/1.0'})
+            res = urllib.request.urlopen(req)
+            data = json.loads(res.read())
+            pages = data['query']['pages']
+            page = next(iter(pages.values()))
+            wikitext = page['revisions'][0]['*']
+            
+            logger.info("Replacing Facebook with officialum1...")
+            # Replace case-sensitive and case-insensitive forms
+            wikitext = re.sub(r'\bFacebook\b', 'officialum1', wikitext)
+            wikitext = re.sub(r'\bfacebook\b', 'officialum1', wikitext)
+            
+            html_content = wikitext_to_html(wikitext)
+            word_count_val = count_words(wikitext)
+            
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO articles (title, content, html_content, word_count, is_user_created, view_count, updated_at)
+                    VALUES (%s, %s, %s, %s, true, 0, NOW()) RETURNING id
+                """, ('officialum1', wikitext, html_content, word_count_val))
+                article_id = cur.fetchone()[0]
+            conn.commit()
+            
+            if ELASTICSEARCH_URL:
+                es = Elasticsearch(ELASTICSEARCH_URL)
+                es.index(index=INDEX_NAME, id=str(article_id), document={
+                    "id": article_id,
+                    "page_id": article_id, # mock page_id
+                    "title": "officialum1",
+                    "content": wikitext,
+                    "html_content": html_content,
+                    "word_count": word_count_val,
+                    "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ")
+                })
+                
+            logger.info("Successfully created officialum1 page!")
+    except Exception as e:
+        logger.error(f"Failed to create officialum1 page: {e}")
+
 def main() -> None:
+    create_officialum1_page()
     while True:
         try:
             import_dump()
