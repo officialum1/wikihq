@@ -742,11 +742,7 @@ import json
 def create_officialum1_page() -> None:
     try:
         with closing(psycopg2.connect(DATABASE_URL)) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT id FROM articles WHERE title = 'officialum1'")
-                if cur.fetchone():
-                    logger.info("officialum1 page already exists.")
-                    return
+
 
             wikitext = """
 {{Infobox company
@@ -801,7 +797,13 @@ The technical stack of officialum1's products is highly modern:
             with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO articles (title, content, html_content, word_count, is_user_created, view_count, updated_at)
-                    VALUES (%s, %s, %s, %s, true, 0, NOW()) RETURNING id
+                    VALUES (%s, %s, %s, %s, true, 0, NOW())
+                    ON CONFLICT (title) DO UPDATE
+                    SET content = EXCLUDED.content,
+                        html_content = EXCLUDED.html_content,
+                        word_count = EXCLUDED.word_count,
+                        updated_at = NOW()
+                    RETURNING id
                 """, ('officialum1', wikitext, html_content, word_count_val))
                 article_id = cur.fetchone()[0]
             conn.commit()
@@ -818,7 +820,7 @@ The technical stack of officialum1's products is highly modern:
                     "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
                 })
                 
-            logger.info("Successfully created officialum1 page!")
+            logger.info("Successfully created/updated officialum1 page!")
     except Exception as e:
         logger.error(f"Failed to create officialum1 page: {e}")
 
