@@ -8,6 +8,7 @@ import unicodedata
 import urllib.request
 import urllib.error
 import urllib.parse
+import signal
 from contextlib import closing
 from pathlib import Path
 from typing import Iterable, Dict, Any
@@ -44,6 +45,30 @@ logging.basicConfig(
 logger = logging.getLogger("wikipedia-worker")
 
 
+class TimeoutException(Exception):
+    pass
+
+
+def timeout_handler(signum, frame):
+    raise TimeoutException()
+
+
+def safe_parse(wikitext: str, timeout: int = 5) -> mwparserfromhell.wikicode.Wikicode:
+    # Skip huge pages that take too long
+    if len(wikitext) > 200000:
+        return mwparserfromhell.parse("")
+        
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(timeout)
+    try:
+        return mwparserfromhell.parse(wikitext)
+    except TimeoutException:
+        logger.warning("mwparserfromhell parsing timed out")
+        return mwparserfromhell.parse("")
+    finally:
+        signal.alarm(0)
+
+
 def slugify(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", normalized).strip("-").lower()
@@ -59,13 +84,17 @@ def inline_wikitext_to_html(value: str) -> str:
     value = re.sub(r"\[\[(?:[^|\]]+\|)?([^\]]+)\]\]", r"\1", value)
     value = re.sub(r"\[(https?://[^\s\]]+)\s+([^\]]+)\]", r"\2", value)
     value = value.replace("'''", "").replace("''", "")
-    parsed = mwparserfromhell.parse(value)
+    return escape_html(value)
+
+
+def escape_html(value: str) -> str:
+    parsed = safe_parse(value)
     clean = str(parsed.strip_code(normalize=True, collapse=True)).strip()
     return html.escape(clean)
 
 
 def wikitext_to_html(wikitext: str) -> str:
-    parsed = mwparserfromhell.parse(wikitext)
+    parsed = safe_parse(wikitext)
     raw = str(parsed)
     blocks: list[str] = []
     open_list: str | None = None
@@ -112,13 +141,13 @@ def wikitext_to_html(wikitext: str) -> str:
 
 
 def count_words(wikitext: str) -> int:
-    plain_text = str(mwparserfromhell.parse(wikitext).strip_code(normalize=True, collapse=True))
+    plain_text = str(safe_parse(wikitext).strip_code(normalize=True, collapse=True))
     return len(WORD_RE.findall(plain_text))
 
 
 def extract_categories(wikitext: str) -> list[str]:
     categories: list[str] = []
-    code = mwparserfromhell.parse(wikitext)
+    code = safe_parse(wikitext)
     for link in code.filter_wikilinks():
         target = str(link.title).strip()
         if target.lower().startswith("category:"):
@@ -130,7 +159,7 @@ def extract_categories(wikitext: str) -> list[str]:
 
 def extract_links(wikitext: str) -> list[str]:
     links: list[str] = []
-    code = mwparserfromhell.parse(wikitext)
+    code = safe_parse(wikitext)
     for link in code.filter_wikilinks():
         target = str(link.title).strip()
         if target and not target.lower().startswith(("category:", "file:", "image:", "template:")):
