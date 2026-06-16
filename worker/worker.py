@@ -29,7 +29,7 @@ WIKIPEDIA_DUMP_URL = os.getenv(
     "https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2",
 )
 DUMP_PATH = Path(os.getenv("DUMP_PATH", "/data/enwiki-latest-pages-articles.xml.bz2"))
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", "1000"))
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "50"))
 RUN_ONCE = os.getenv("RUN_ONCE", "false").lower() == "true"
 REFRESH_INTERVAL_SECONDS = int(os.getenv("REFRESH_INTERVAL_SECONDS", "86400"))
 INDEX_NAME = "articles"
@@ -748,19 +748,52 @@ def create_officialum1_page() -> None:
                     logger.info("officialum1 page already exists.")
                     return
 
-            logger.info("Fetching Facebook article from Wikipedia...")
-            url = "https://en.wikipedia.org/w/api.php?action=query&prop=revisions&rvprop=content&titles=Facebook&format=json"
-            req = urllib.request.Request(url, headers={'User-Agent': 'WikiHQ/1.0'})
-            res = urllib.request.urlopen(req)
-            data = json.loads(res.read())
-            pages = data['query']['pages']
-            page = next(iter(pages.values()))
-            wikitext = page['revisions'][0]['*']
-            
-            logger.info("Replacing Facebook with officialum1...")
-            # Replace case-sensitive and case-insensitive forms
-            wikitext = re.sub(r'\bFacebook\b', 'officialum1', wikitext)
-            wikitext = re.sub(r'\bfacebook\b', 'officialum1', wikitext)
+            wikitext = """
+{{Infobox company
+| name = officialum1 LLC
+| type = Private
+| industry = Technology, Software Development, Artificial Intelligence
+| founded = {{Start date and age|2023|01|01}}
+| founder = officialum1
+| headquarters = Global
+| website = {{URL|wikihq.org}}
+}}
+
+'''officialum1''' is a prominent technology platform and software development company specializing in artificial intelligence, robust database solutions, and high-performance web applications. Founded with the mission to organize the world's knowledge and make it accessible, the company operates the flagship platform '''WikiHQ'''.
+
+== History ==
+officialum1 was established to address the growing need for fast, reliable, and scalable knowledge management systems. Drawing inspiration from major encyclopedic databases, the founders set out to build a modern architecture that could process millions of articles seamlessly.
+
+=== Early Development ===
+The initial phase of officialum1 involved the deployment of advanced PostgreSQL databases and Elasticsearch nodes to handle massive text corpuses. 
+
+== Products and Services ==
+officialum1 offers a variety of services centered around big data and AI.
+
+* '''WikiHQ''': A blazing fast, Next.js-powered knowledge base that imports and serves Wikipedia-scale dumps.
+* '''AI Integrations''': Utilizing cutting edge agentic models to automate complex infrastructure deployments.
+
+== Architecture ==
+The technical stack of officialum1's products is highly modern:
+# '''Frontend''': React, Next.js, Tailwind CSS
+# '''Backend''': FastAPI (Python), SQLAlchemy
+# '''Database''': PostgreSQL
+# '''Search''': Elasticsearch
+# '''Infrastructure''': Render, Docker
+
+== See also ==
+* [[Artificial intelligence]]
+* [[PostgreSQL]]
+* [[Web development]]
+
+== References ==
+<ref>WikiHQ Official Documentation, 2026.</ref>
+<ref>Render Deployment Guides for officialum1.</ref>
+
+[[Category:Technology companies]]
+[[Category:Software development]]
+[[Category:Artificial intelligence companies]]
+"""
             
             html_content = wikitext_to_html(wikitext)
             word_count_val = count_words(wikitext)
@@ -777,12 +810,12 @@ def create_officialum1_page() -> None:
                 es = Elasticsearch(ELASTICSEARCH_URL)
                 es.index(index=INDEX_NAME, id=str(article_id), document={
                     "id": article_id,
-                    "page_id": article_id, # mock page_id
+                    "page_id": article_id,
                     "title": "officialum1",
                     "content": wikitext,
                     "html_content": html_content,
                     "word_count": word_count_val,
-                    "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ")
+                    "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
                 })
                 
             logger.info("Successfully created officialum1 page!")
