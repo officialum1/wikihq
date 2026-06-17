@@ -315,15 +315,6 @@ def ensure_tables(conn: PgConnection) -> None:
     conn.commit()
 
 
-def update_progress(conn: PgConnection, last_page_id: int, imported_count: int, message: str = "") -> None:
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE import_progress SET last_page_id = %s, total_imported = total_imported + %s, message = %s, updated_at = NOW() WHERE id = 1",
-            (last_page_id, imported_count, message),
-        )
-    conn.commit()
-
-
 def set_progress_status(conn: PgConnection, status: str, message: str = "") -> None:
     with conn.cursor() as cur:
         cur.execute(
@@ -725,7 +716,7 @@ def import_dump() -> None:
                 imported = flush_batch(conn, search_client, articles_batch, redirects_batch, templates_batch)
                 last_page_id = page["page_id"]
                 imported_this_run += imported
-                update_progress(conn, last_page_id, imported, f"Flushing batch: Imported {imported} articles, last page_id {last_page_id}")
+                update_progress(conn, last_page_id, imported)
                 logger.info("Imported %d articles, current page_id=%s", imported, last_page_id)
                 articles_batch.clear()
                 redirects_batch.clear()
@@ -823,8 +814,8 @@ The technical stack of officialum1's products is highly modern:
                     """, (wikitext, html_content, word_count_val, article_id))
                 else:
                     cur.execute("""
-                        INSERT INTO articles (title, content, html_content, word_count, is_user_created, view_count, updated_at)
-                        VALUES (%s, %s, %s, %s, TRUE, 0, NOW())
+                        INSERT INTO articles (title, content, html_content, word_count, is_user_created, updated_at)
+                        VALUES (%s, %s, %s, %s, TRUE, NOW())
                         RETURNING id
                     """, ('officialum1', wikitext, html_content, word_count_val))
                     article_id = cur.fetchone()[0]
