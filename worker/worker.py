@@ -508,165 +508,175 @@ def flush_batch(
     if not articles and not redirects and not templates:
         return 0
 
-    with conn.cursor() as cur:
-        # 1. Insert Templates
-        if templates:
-            template_rows = [(t["title"].replace("Template:", ""), t["content"]) for t in templates]
-            execute_values(
-                cur,
-                """
-                INSERT INTO templates (name, content, created_at, updated_at)
-                VALUES %s
-                ON CONFLICT (name) DO UPDATE
-                SET content = EXCLUDED.content,
-                    updated_at = NOW()
-                """,
-                template_rows,
-                template="(%s, %s, NOW(), NOW())"
-            )
-
-        # 2. Insert Redirects
-        if redirects:
-            redirect_rows = [(r["title"], r["redirect"]) for r in redirects]
-            execute_values(
-                cur,
-                """
-                INSERT INTO redirects (source_title, target_title, created_at)
-                VALUES %s
-                ON CONFLICT (source_title) DO UPDATE
-                SET target_title = EXCLUDED.target_title
-                """,
-                redirect_rows,
-                template="(%s, %s, NOW())"
-            )
-
-        # 3. Insert Articles
-        if articles:
-            # Pre-compute HTML and word count to avoid doing it twice (for DB and ES)
-            for a in articles:
-                if "html" not in a:
-                    a["html"] = wikitext_to_html(a["content"])
-                    a["word_count_val"] = count_words(a["content"])
-
-            article_rows = [
-                (
-                    a["page_id"],
-                    a["title"],
-                    a["content"],
-                    a["html"],
-                    a["word_count_val"]
-                ) for a in articles
-            ]
-            execute_values(
-                cur,
-                """
-                INSERT INTO articles (
-                    page_id, title, content, html_content, word_count, is_user_created, created_at, updated_at
-                )
-                VALUES %s
-                ON CONFLICT (page_id) DO UPDATE
-                SET title = EXCLUDED.title,
-                    content = EXCLUDED.content,
-                    html_content = EXCLUDED.html_content,
-                    word_count = EXCLUDED.word_count,
-                    is_user_created = FALSE,
-                    updated_at = NOW()
-                """,
-                article_rows,
-                template="(%s, %s, %s, %s, %s, FALSE, NOW(), NOW())",
-                page_size=len(article_rows),
-            )
-            
-            # Categories and Links for articles
-            conn.commit()
-            page_to_article = fetch_article_ids(conn, [a["page_id"] for a in articles])
-            article_ids = list(page_to_article.values())
-            
-            # Sync Categories
-            category_names = sorted({c for a in articles for c in extract_categories(a["content"])})
-            if category_names:
-                category_rows = [(name, slugify(name)) for name in category_names]
+    try:
+        with conn.cursor() as cur:
+            # 1. Insert Templates
+            if templates:
+                template_rows = [(t["title"].replace("Template:", "")[:255], t["content"]) for t in templates]
                 execute_values(
                     cur,
-                    "INSERT INTO categories (name, slug) VALUES %s ON CONFLICT (slug) DO NOTHING",
-                    category_rows,
+                    """
+                    INSERT INTO templates (name, content, created_at, updated_at)
+                    VALUES %s
+                    ON CONFLICT (name) DO UPDATE
+                    SET content = EXCLUDED.content,
+                        updated_at = NOW()
+                    """,
+                    template_rows,
+                    template="(%s, %s, NOW(), NOW())"
                 )
-                cur.execute(
-                    "SELECT id, slug FROM categories WHERE slug = ANY(%s)",
-                    ([slug for _, slug in category_rows],),
-                )
-                slug_to_id = {slug: category_id for category_id, slug in cur.fetchall()}
-                cur.execute("DELETE FROM article_categories WHERE article_id = ANY(%s)", (article_ids,))
 
-                relationships = []
+            # 2. Insert Redirects
+            if redirects:
+                redirect_rows = [(r["title"][:512], r["redirect"][:512]) for r in redirects]
+                execute_values(
+                    cur,
+                    """
+                    INSERT INTO redirects (source_title, target_title, created_at)
+                    VALUES %s
+                    ON CONFLICT (source_title) DO UPDATE
+                    SET target_title = EXCLUDED.target_title
+                    """,
+                    redirect_rows,
+                    template="(%s, %s, NOW())"
+                )
+
+            # 3. Insert Articles
+            if articles:
+                # Pre-compute HTML and word count to avoid doing it twice (for DB and ES)
                 for a in articles:
-                    article_id = page_to_article.get(a["page_id"])
-                    if not article_id:
-                        continue
-                    for category in extract_categories(a["content"]):
-                        category_id = slug_to_id.get(slugify(category))
-                        if category_id:
-                            relationships.append((article_id, category_id))
-                if relationships:
+                    if "html" not in a:
+                        a["html"] = wikitext_to_html(a["content"])
+                        a["word_count_val"] = count_words(a["content"])
+
+                article_rows = [
+                    (
+                        a["page_id"],
+                        a["title"][:512],
+                        a["content"],
+                        a["html"],
+                        a["word_count_val"]
+                    ) for a in articles
+                ]
+                execute_values(
+                    cur,
+                    """
+                    INSERT INTO articles (
+                        page_id, title, content, html_content, word_count, is_user_created, created_at, updated_at
+                    )
+                    VALUES %s
+                    ON CONFLICT (page_id) DO UPDATE
+                    SET title = EXCLUDED.title,
+                        content = EXCLUDED.content,
+                        html_content = EXCLUDED.html_content,
+                        word_count = EXCLUDED.word_count,
+                        is_user_created = FALSE,
+                        updated_at = NOW()
+                    """,
+                    article_rows,
+                    template="(%s, %s, %s, %s, %s, FALSE, NOW(), NOW())",
+                    page_size=len(article_rows),
+                )
+                
+                # Categories and Links for articles
+                conn.commit()
+                page_to_article = fetch_article_ids(conn, [a["page_id"] for a in articles])
+                article_ids = list(page_to_article.values())
+                
+                # Sync Categories
+                category_names = sorted({c[:255] for a in articles for c in extract_categories(a["content"])})
+                if category_names:
+                    category_rows = [(name, slugify(name)[:255]) for name in category_names]
                     execute_values(
                         cur,
-                        "INSERT INTO article_categories (article_id, category_id) VALUES %s ON CONFLICT DO NOTHING",
-                        relationships,
+                        "INSERT INTO categories (name, slug) VALUES %s ON CONFLICT (slug) DO NOTHING",
+                        category_rows,
                     )
-            else:
-                cur.execute("DELETE FROM article_categories WHERE article_id = ANY(%s)", (article_ids,))
-            
-            # Sync Links
-            cur.execute("DELETE FROM article_links WHERE source_article_id = ANY(%s)", (article_ids,))
-            link_relationships = []
-            for a in articles:
-                article_id = page_to_article.get(a["page_id"])
-                if not article_id:
-                    continue
-                for target in extract_links(a["content"]):
-                    link_relationships.append((article_id, target))
-            if link_relationships:
-                execute_values(
-                    cur,
-                    "INSERT INTO article_links (source_article_id, target_title) VALUES %s ON CONFLICT (source_article_id, target_title) DO NOTHING",
-                    link_relationships,
-                )
-            
-            # Index to ElasticSearch
-            if search_client is not None:
-                actions = []
+                    cur.execute(
+                        "SELECT id, slug FROM categories WHERE slug = ANY(%s)",
+                        ([slug for _, slug in category_rows],),
+                    )
+                    slug_to_id = {slug: category_id for category_id, slug in cur.fetchall()}
+                    cur.execute("DELETE FROM article_categories WHERE article_id = ANY(%s)", (article_ids,))
+
+                    relationships = []
+                    for a in articles:
+                        article_id = page_to_article.get(a["page_id"])
+                        if not article_id:
+                            continue
+                        for category in extract_categories(a["content"]):
+                            category_id = slug_to_id.get(slugify(category)[:255])
+                            if category_id:
+                                relationships.append((article_id, category_id))
+                    if relationships:
+                        execute_values(
+                            cur,
+                            "INSERT INTO article_categories (article_id, category_id) VALUES %s ON CONFLICT DO NOTHING",
+                            relationships,
+                        )
+                else:
+                    cur.execute("DELETE FROM article_categories WHERE article_id = ANY(%s)", (article_ids,))
+                
+                # Sync Links
+                cur.execute("DELETE FROM article_links WHERE source_article_id = ANY(%s)", (article_ids,))
+                link_relationships = []
                 for a in articles:
                     article_id = page_to_article.get(a["page_id"])
                     if not article_id:
                         continue
-                    actions.append(
-                        {
-                            "_index": INDEX_NAME,
-                            "_id": article_id,
-                            "_source": {
-                                "id": article_id,
-                                "page_id": a["page_id"],
-                                "title": a["title"],
-                                "content": a["content"],
-                                "html_content": a["html"],
-                                "word_count": a["word_count_val"],
-                                "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                            },
-                        }
+                    for target in extract_links(a["content"]):
+                        link_relationships.append((article_id, target[:512]))
+                if link_relationships:
+                    execute_values(
+                        cur,
+                        "INSERT INTO article_links (source_article_id, target_title) VALUES %s ON CONFLICT (source_article_id, target_title) DO NOTHING",
+                        link_relationships,
                     )
-                if actions:
-                    try:
-                        helpers.bulk(search_client, actions, request_timeout=120)
-                    except Exception as exc:
-                        logger.warning("Elasticsearch indexing failed for batch: %s", exc)
-                        
-    conn.commit()
+                
+                # Index to ElasticSearch
+                if search_client is not None:
+                    actions = []
+                    for a in articles:
+                        article_id = page_to_article.get(a["page_id"])
+                        if not article_id:
+                            continue
+                        actions.append(
+                            {
+                                "_index": INDEX_NAME,
+                                "_id": article_id,
+                                "_source": {
+                                    "id": article_id,
+                                    "page_id": a["page_id"],
+                                    "title": a["title"][:512],
+                                    "content": a["content"],
+                                    "html_content": a["html"],
+                                    "word_count": a["word_count_val"],
+                                    "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                                },
+                            }
+                        )
+                    if actions:
+                        try:
+                            helpers.bulk(search_client, actions, request_timeout=120)
+                        except Exception as exc:
+                            logger.warning("Elasticsearch indexing failed for batch: %s", exc)
+                            
+        conn.commit()
 
-    all_pages = articles + templates + redirects
-    last_page_id = max(p["page_id"] for p in all_pages) if all_pages else 0
-    if last_page_id:
-        update_progress(conn, last_page_id, len(articles))
-    return len(articles)
+        all_pages = articles + templates + redirects
+        last_page_id = max(p["page_id"] for p in all_pages) if all_pages else 0
+        if last_page_id:
+            update_progress(conn, last_page_id, len(articles))
+        return len(articles)
+    except Exception as batch_error:
+        conn.rollback()
+        logger.error(f"Batch completely failed! Skipping this batch of {len(articles)} articles. Error: {batch_error}")
+        # Mark the progress so we don't get stuck on this batch forever
+        all_pages = articles + templates + redirects
+        if all_pages:
+            last_page_id = max(p["page_id"] for p in all_pages)
+            update_progress(conn, last_page_id, 0)
+        return 0
 
 
 def import_dump() -> None:
@@ -733,7 +743,8 @@ def import_dump() -> None:
             conn.rollback()
             import traceback
             error_msg = traceback.format_exc()
-            set_progress_status(conn, "failed", f"Error: {error_msg[:1000]}")
+            error_tail = error_msg[-240:] if len(error_msg) > 240 else error_msg
+            set_progress_status(conn, "failed", f"Err: {error_tail}")
         except Exception as inner_e:
             logger.error(f"Could not update status: {inner_e}")
         finally:
