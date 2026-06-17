@@ -686,8 +686,7 @@ def flush_batch(
             update_progress(conn, last_page_id, 0, f"Batch Error: {error_tail}")
         
         # FREEZE so the error can be read on the progress page!
-        import time
-        time.sleep(3600)
+        pass
         return 0
 
 
@@ -699,6 +698,7 @@ def import_dump() -> None:
         set_progress_status(conn, "running")
         download_dump(conn)
         last_page_id, total_imported = read_progress(conn)
+        last_page_id = 0  # FORCE RESET
         logger.info("Resuming import after page_id=%s total_imported=%s", last_page_id, total_imported)
 
         try:
@@ -871,8 +871,7 @@ The technical stack of officialum1's products is highly modern:
             pass
         
         # FREEZE so the error can be read on the progress page!
-        import time
-        time.sleep(3600)
+        pass
 
 def main() -> None:
     create_officialum1_page()
