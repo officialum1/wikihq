@@ -683,6 +683,10 @@ def flush_batch(
         if all_pages:
             last_page_id = max(p["page_id"] for p in all_pages)
             update_progress(conn, last_page_id, 0, f"Batch Error: {error_tail}")
+        
+        # FREEZE so the error can be read on the progress page!
+        import time
+        time.sleep(3600)
         return 0
 
 
@@ -864,6 +868,10 @@ The technical stack of officialum1's products is highly modern:
                 set_progress_status(err_conn, "failed", f"Err: {error_tail}")
         except Exception:
             pass
+        
+        # FREEZE so the error can be read on the progress page!
+        import time
+        time.sleep(3600)
 
 def main() -> None:
     create_officialum1_page()
