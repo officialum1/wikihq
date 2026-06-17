@@ -503,18 +503,18 @@ def flush_batch(
         with conn.cursor() as cur:
             # 1. Insert Templates
             if templates:
-                template_rows = [(t["title"].replace("Template:", "")[:255], t["content"]) for t in templates]
+                template_rows = [(t["title"].replace("Template:", "")[:255], t["content"], "") for t in templates]
                 execute_values(
                     cur,
                     """
-                    INSERT INTO templates (name, content, created_at, updated_at)
+                    INSERT INTO templates (name, content, description, created_at, updated_at)
                     VALUES %s
                     ON CONFLICT (name) DO UPDATE
                     SET content = EXCLUDED.content,
                         updated_at = NOW()
                     """,
                     template_rows,
-                    template="(%s, %s, NOW(), NOW())"
+                    template="(%s, %s, %s, NOW(), NOW())"
                 )
 
             # 2. Insert Redirects
@@ -814,10 +814,10 @@ The technical stack of officialum1's products is highly modern:
                     """, (wikitext, html_content, word_count_val, article_id))
                 else:
                     cur.execute("""
-                        INSERT INTO articles (title, content, html_content, word_count, is_user_created, updated_at)
-                        VALUES (%s, %s, %s, %s, TRUE, NOW())
+                        INSERT INTO articles (page_id, title, content, html_content, word_count, is_user_created, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, TRUE, NOW())
                         RETURNING id
-                    """, ('officialum1', wikitext, html_content, word_count_val))
+                    """, (999999999, 'officialum1', wikitext, html_content, word_count_val))
                     article_id = cur.fetchone()[0]
             conn.commit()
             
@@ -843,8 +843,9 @@ The technical stack of officialum1's products is highly modern:
         try:
             import traceback
             error_msg = traceback.format_exc()
+            error_tail = error_msg[-200:] if len(error_msg) > 200 else error_msg
             with closing(psycopg2.connect(DATABASE_URL)) as err_conn:
-                set_progress_status(err_conn, "failed", f"officialum1 Page Creation Error: {error_msg[:1000]}")
+                set_progress_status(err_conn, "failed", f"Err: {error_tail}")
         except Exception:
             pass
 
