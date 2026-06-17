@@ -593,14 +593,29 @@ def flush_batch(
                 category_names = sorted({c[:255] for a in articles for c in extract_categories(a["content"])})
                 if category_names:
                     category_rows = [(name, slugify(name)[:255]) for name in category_names]
-                    execute_values(
-                        cur,
-                        "INSERT INTO categories (name, slug) VALUES %s ON CONFLICT (slug) DO NOTHING",
-                        category_rows,
-                    )
+                    # Filter out existing to avoid unique constraint issues
+                    slugs = [slug for _, slug in category_rows]
+                    cur.execute("SELECT slug FROM categories WHERE slug = ANY(%s)", (slugs,))
+                    existing_slugs = {row[0] for row in cur.fetchall()}
+                    new_rows = [row for row in category_rows if row[1] not in existing_slugs]
+                    
+                    # Ensure new_rows has no duplicates by slug
+                    seen = set()
+                    unique_new_rows = []
+                    for row in new_rows:
+                        if row[1] not in seen:
+                            seen.add(row[1])
+                            unique_new_rows.append(row)
+                    
+                    if unique_new_rows:
+                        execute_values(
+                            cur,
+                            "INSERT INTO categories (name, slug) VALUES %s",
+                            unique_new_rows,
+                        )
                     cur.execute(
                         "SELECT id, slug FROM categories WHERE slug = ANY(%s)",
-                        ([slug for _, slug in category_rows],),
+                        (slugs,),
                     )
                     slug_to_id = {slug: category_id for category_id, slug in cur.fetchall()}
                     cur.execute("DELETE FROM article_categories WHERE article_id = ANY(%s)", (article_ids,))
@@ -630,12 +645,16 @@ def flush_batch(
                     article_id = page_to_article.get(a["page_id"])
                     if not article_id:
                         continue
-                    for target in extract_links(a["content"]):
+                    for target in set(extract_links(a["content"])):
                         link_relationships.append((article_id, target[:512]))
+                
+                # Remove duplicates across same article just in case
+                link_relationships = list(set(link_relationships))
+                
                 if link_relationships:
                     execute_values(
                         cur,
-                        "INSERT INTO article_links (source_article_id, target_title) VALUES %s ON CONFLICT (source_article_id, target_title) DO NOTHING",
+                        "INSERT INTO article_links (source_article_id, target_title) VALUES %s",
                         link_relationships,
                     )
                 
