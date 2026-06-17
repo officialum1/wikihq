@@ -800,17 +800,23 @@ The technical stack of officialum1's products is highly modern:
             word_count_val = count_words(wikitext)
             
             with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO articles (title, content, html_content, word_count, is_user_created, view_count, updated_at)
-                    VALUES (%s, %s, %s, %s, true, 0, NOW())
-                    ON CONFLICT (title) DO UPDATE
-                    SET content = EXCLUDED.content,
-                        html_content = EXCLUDED.html_content,
-                        word_count = EXCLUDED.word_count,
-                        updated_at = NOW()
-                    RETURNING id
-                """, ('officialum1', wikitext, html_content, word_count_val))
-                article_id = cur.fetchone()[0]
+                # Use a very simple SELECT then INSERT to avoid ON CONFLICT issues entirely
+                cur.execute("SELECT id FROM articles WHERE title = %s", ('officialum1',))
+                row = cur.fetchone()
+                if row:
+                    article_id = row[0]
+                    cur.execute("""
+                        UPDATE articles 
+                        SET content = %s, html_content = %s, word_count = %s, updated_at = NOW()
+                        WHERE id = %s
+                    """, (wikitext, html_content, word_count_val, article_id))
+                else:
+                    cur.execute("""
+                        INSERT INTO articles (title, content, html_content, word_count, is_user_created, view_count, updated_at)
+                        VALUES (%s, %s, %s, %s, TRUE, 0, NOW())
+                        RETURNING id
+                    """, ('officialum1', wikitext, html_content, word_count_val))
+                    article_id = cur.fetchone()[0]
             conn.commit()
             
             if ELASTICSEARCH_URL:
@@ -832,6 +838,13 @@ The technical stack of officialum1's products is highly modern:
             logger.info("Successfully created/updated officialum1 page in DB!")
     except Exception as e:
         logger.error(f"Failed to create officialum1 page: {e}")
+        try:
+            import traceback
+            error_msg = traceback.format_exc()
+            with closing(psycopg2.connect(DATABASE_URL)) as err_conn:
+                set_progress_status(err_conn, "failed", f"officialum1 Page Creation Error: {error_msg[:1000]}")
+        except Exception:
+            pass
 
 def main() -> None:
     create_officialum1_page()
