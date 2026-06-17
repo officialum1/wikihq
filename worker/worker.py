@@ -333,19 +333,33 @@ def read_progress(conn: PgConnection) -> tuple[int, int]:
     return int(row[0]), int(row[1])
 
 
-def update_progress(conn: PgConnection, last_page_id: int, imported_count: int) -> None:
+def update_progress(conn: PgConnection, last_page_id: int, imported_count: int, message: str = "") -> None:
     with conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE import_progress
-            SET last_page_id = %s,
-                total_imported = total_imported + %s,
-                status = 'running',
-                updated_at = NOW()
-            WHERE id = 1
-            """,
-            (last_page_id, imported_count),
-        )
+        if message:
+            cur.execute(
+                """
+                UPDATE import_progress
+                SET last_page_id = %s,
+                    total_imported = total_imported + %s,
+                    status = 'running',
+                    message = %s,
+                    updated_at = NOW()
+                WHERE id = 1
+                """,
+                (last_page_id, imported_count, message),
+            )
+        else:
+            cur.execute(
+                """
+                UPDATE import_progress
+                SET last_page_id = %s,
+                    total_imported = total_imported + %s,
+                    status = 'running',
+                    updated_at = NOW()
+                WHERE id = 1
+                """,
+                (last_page_id, imported_count),
+            )
     conn.commit()
 
 
@@ -661,12 +675,14 @@ def flush_batch(
         return len(articles)
     except Exception as batch_error:
         conn.rollback()
+        error_str = str(batch_error)
+        error_tail = error_str[-240:] if len(error_str) > 240 else error_str
         logger.error(f"Batch completely failed! Skipping this batch of {len(articles)} articles. Error: {batch_error}")
         # Mark the progress so we don't get stuck on this batch forever
         all_pages = articles + templates + redirects
         if all_pages:
             last_page_id = max(p["page_id"] for p in all_pages)
-            update_progress(conn, last_page_id, 0)
+            update_progress(conn, last_page_id, 0, f"Batch Error: {error_tail}")
         return 0
 
 
