@@ -570,8 +570,8 @@ def flush_batch(
                         page_id, title, content, html_content, word_count, is_user_created, created_at, updated_at
                     )
                     VALUES %s
-                    ON CONFLICT (page_id) DO UPDATE
-                    SET title = EXCLUDED.title,
+                    ON CONFLICT (title) DO UPDATE
+                    SET page_id = EXCLUDED.page_id,
                         content = EXCLUDED.content,
                         html_content = EXCLUDED.html_content,
                         word_count = EXCLUDED.word_count,
