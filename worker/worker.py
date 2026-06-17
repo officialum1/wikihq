@@ -194,9 +194,9 @@ def extract_links(wikitext: str) -> list[str]:
     links: list[str] = []
     for match in re.finditer(r"\[\[([^\]|]+)(?:\|.*?)?\]\]", wikitext):
         target = match.group(1).strip()
-        if target and not target.lower().startswith(("category:", "file:", "image:", "template:")):
+        if target and len(target) <= 512 and not target.lower().startswith(("category:", "file:", "image:", "template:")):
             normalized = normalize_title(target)
-            if normalized not in links:
+            if normalized and len(normalized) <= 512 and normalized not in links:
                 links.append(normalized)
     return links
 
@@ -628,7 +628,7 @@ def flush_batch(
             if link_relationships:
                 execute_values(
                     cur,
-                    "INSERT INTO article_links (source_article_id, target_title) VALUES %s",
+                    "INSERT INTO article_links (source_article_id, target_title) VALUES %s ON CONFLICT (source_article_id, target_title) DO NOTHING",
                     link_relationships,
                 )
             
