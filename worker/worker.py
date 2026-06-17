@@ -823,7 +823,7 @@ The technical stack of officialum1's products is highly modern:
             
             with conn.cursor() as cur:
                 # Use a very simple SELECT then INSERT to avoid ON CONFLICT issues entirely
-                cur.execute("SELECT id FROM articles WHERE title = %s", ('officialum1',))
+                cur.execute("SELECT id FROM articles WHERE title = %s", ('Officialum1',))
                 row = cur.fetchone()
                 if row:
                     article_id = row[0]
@@ -837,7 +837,7 @@ The technical stack of officialum1's products is highly modern:
                         INSERT INTO articles (page_id, title, content, html_content, word_count, is_user_created, updated_at)
                         VALUES (%s, %s, %s, %s, %s, TRUE, NOW())
                         RETURNING id
-                    """, (999999999, 'officialum1', wikitext, html_content, word_count_val))
+                    """, (999999999, 'Officialum1', wikitext, html_content, word_count_val))
                     article_id = cur.fetchone()[0]
             conn.commit()
             
