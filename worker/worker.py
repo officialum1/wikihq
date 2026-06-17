@@ -518,14 +518,14 @@ def flush_batch(
             # 1. Insert Templates
             if templates:
                 template_rows = [(t["title"].replace("Template:", "")[:255], t["content"], "") for t in templates]
+                template_names = tuple(t[0] for t in template_rows)
+                if template_names:
+                    cur.execute("DELETE FROM templates WHERE name IN %s", (template_names,))
                 execute_values(
                     cur,
                     """
                     INSERT INTO templates (name, content, description, created_at, updated_at)
                     VALUES %s
-                    ON CONFLICT (name) DO UPDATE
-                    SET content = EXCLUDED.content,
-                        updated_at = NOW()
                     """,
                     template_rows,
                     template="(%s, %s, %s, NOW(), NOW())"
@@ -534,13 +534,14 @@ def flush_batch(
             # 2. Insert Redirects
             if redirects:
                 redirect_rows = [(r["title"][:512], r["redirect"][:512]) for r in redirects]
+                source_titles = tuple(r[0] for r in redirect_rows)
+                if source_titles:
+                    cur.execute("DELETE FROM redirects WHERE source_title IN %s", (source_titles,))
                 execute_values(
                     cur,
                     """
                     INSERT INTO redirects (source_title, target_title, created_at)
                     VALUES %s
-                    ON CONFLICT (source_title) DO UPDATE
-                    SET target_title = EXCLUDED.target_title
                     """,
                     redirect_rows,
                     template="(%s, %s, NOW())"
