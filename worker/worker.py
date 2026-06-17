@@ -730,7 +730,12 @@ def import_dump() -> None:
     except Exception as e:
         logger.exception("Import failed")
         try:
-            set_progress_status(conn, "failed", f"Error: {str(e)[:500]}")
+            conn.rollback()
+            import traceback
+            error_msg = traceback.format_exc()
+            set_progress_status(conn, "failed", f"Error: {error_msg[:1000]}")
+        except Exception as inner_e:
+            logger.error(f"Could not update status: {inner_e}")
         finally:
             raise
     finally:
@@ -809,18 +814,22 @@ The technical stack of officialum1's products is highly modern:
             conn.commit()
             
             if ELASTICSEARCH_URL:
-                es = Elasticsearch(ELASTICSEARCH_URL)
-                es.index(index=INDEX_NAME, id=str(article_id), document={
-                    "id": article_id,
-                    "page_id": article_id,
-                    "title": "officialum1",
-                    "content": wikitext,
-                    "html_content": html_content,
-                    "word_count": word_count_val,
-                    "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                })
+                try:
+                    es = Elasticsearch(ELASTICSEARCH_URL, request_timeout=5)
+                    es.index(index=INDEX_NAME, id=str(article_id), document={
+                        "id": article_id,
+                        "page_id": article_id,
+                        "title": "officialum1",
+                        "content": wikitext,
+                        "html_content": html_content,
+                        "word_count": word_count_val,
+                        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                    })
+                    logger.info("Successfully indexed officialum1 page in Elasticsearch!")
+                except Exception as es_e:
+                    logger.warning(f"Failed to index officialum1 page in ES (is ES down?): {es_e}")
                 
-            logger.info("Successfully created/updated officialum1 page!")
+            logger.info("Successfully created/updated officialum1 page in DB!")
     except Exception as e:
         logger.error(f"Failed to create officialum1 page: {e}")
 
