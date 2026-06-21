@@ -313,12 +313,6 @@ def special_pages() -> list[SpecialPageOut]:
             section="Navigation",
         ),
         SpecialPageOut(
-            title="Import progress",
-            path="/admin/progress",
-            description="Wikipedia dump worker status.",
-            section="Maintenance",
-        ),
-        SpecialPageOut(
             title="Maintenance Jobs",
             path="/admin/maintenance",
             description="Run background maintenance tasks.",
