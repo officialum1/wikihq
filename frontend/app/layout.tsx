@@ -42,10 +42,6 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
               <Search size={17} />
               Search
             </Link>
-            <Link href="/admin/progress">
-              <Gauge size={17} />
-              Progress
-            </Link>
             <Link href="/special">
               <ListTree size={17} />
               Special
