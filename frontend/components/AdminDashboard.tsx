@@ -66,7 +66,6 @@ export default function AdminDashboard() {
         <Link className="result-item" href="/special/files"><h3>Files</h3><p>Media records.</p></Link>
         <Link className="result-item" href="/special/templates"><h3>Templates</h3><p>Reusable wiki snippets.</p></Link>
         <Link className="result-item" href="/special/redirects"><h3>Redirects</h3><p>Redirect management.</p></Link>
-        <Link className="result-item" href="/admin/progress"><h3>Import progress</h3><p>Worker status.</p></Link>
       </nav>
     </section>
   );
