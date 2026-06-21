@@ -95,8 +95,30 @@ def inline_wikitext_to_html(value: str) -> str:
 
 def wikitext_to_html(wikitext: str) -> str:
     parsed = mwparserfromhell.parse(wikitext)
+    
+    infobox_blocks: list[str] = []
+    
+    # Process and remove templates
+    for template in parsed.filter_templates():
+        name = str(template.name).strip()
+        if name.lower().startswith("infobox"):
+            rows = []
+            for param in template.params:
+                k = str(param.name).strip()
+                v = str(param.value).strip()
+                if v:
+                    rows.append(f"<tr><th>{html.escape(k)}</th><td>{inline_wikitext_to_html(v)}</td></tr>")
+            if rows:
+                infobox_blocks.append(f'<aside class="infobox"><table><tbody>{"".join(rows)}</tbody></table></aside>')
+        
+        try:
+            parsed.remove(template)
+        except ValueError:
+            pass
+
     raw = str(parsed)
     blocks: list[str] = []
+    blocks.extend(infobox_blocks)
     open_list: str | None = None
 
     def close_list() -> None:

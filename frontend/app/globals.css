@@ -736,3 +736,33 @@ textarea {
     padding: 16px;
   }
 }
+
+/* Wikipedia-style Infobox */
+.infobox {
+  float: right;
+  clear: right;
+  margin: 0 0 1em 1em;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 0.5em;
+  font-size: 88%;
+  line-height: 1.5em;
+  width: 22em;
+  max-width: 100%;
+}
+
+.infobox table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.infobox th, .infobox td {
+  padding: 0.2em 0.5em;
+  vertical-align: top;
+}
+
+.infobox th {
+  text-align: left;
+  background-color: var(--bg-hover);
+  width: 35%;
+}
